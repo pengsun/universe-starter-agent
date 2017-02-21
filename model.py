@@ -49,15 +49,27 @@ def categorical_sample(logits, d):
     return tf.one_hot(value, d)
 
 
-class LSTMPolicy(object):
+class Convx2LSTMActorCritic(object):
     def __init__(self, ob_space, ac_space):
+        # screen input
         self.x = x = tf.placeholder(tf.float32, [None] + list(ob_space))
 
-        for i in range(4):
-            x = tf.nn.elu(conv2d(x, 32, "l{}".format(i + 1), [3, 3], [2, 2]))
-        # introduce a "fake" batch dimension of 1 after flatten so that we can do LSTM over time dim
-        x = tf.expand_dims(flatten(x), [0])
+        # conv block I
+        x = tf.nn.relu(conv2d(x, 16, "l1", [8, 8], [4, 4]))
 
+        # conv block II
+        x = tf.nn.relu(conv2d(x, 32, "l2", [4, 4], [2, 2]))
+
+        #
+        x = flatten(x)
+
+        # linear layer
+        x = linear(x, 256, 'fc', normalized_columns_initializer(0.01))
+
+        # add singleton batch dim for LSTM time axis
+        x = tf.expand_dims(x, [0])
+
+        # LSTM layer
         size = 256
         lstm = rnn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True)
         self.state_size = lstm.state_size
@@ -76,10 +88,16 @@ class LSTMPolicy(object):
             time_major=False)
         lstm_c, lstm_h = lstm_state
         x = tf.reshape(lstm_outputs, [-1, size])
+
+        # output: policy
         self.logits = linear(x, ac_space, "action", normalized_columns_initializer(0.01))
-        self.vf = tf.reshape(linear(x, 1, "value", normalized_columns_initializer(1.0)), [-1])
-        self.state_out = [lstm_c[:1, :], lstm_h[:1, :]]
         self.sample = categorical_sample(self.logits, ac_space)[0, :]
+        # output: value
+        self.vf = tf.reshape(linear(x, 1, "value", normalized_columns_initializer(1.0)), [-1])
+        # output: LSTM states
+        self.state_out = [lstm_c[:1, :], lstm_h[:1, :]]
+
+        # collect all parameters
         self.var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, tf.get_variable_scope().name)
 
     def get_initial_features(self):
