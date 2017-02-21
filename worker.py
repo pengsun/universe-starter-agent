@@ -10,10 +10,12 @@ import os
 from a3c import A3C
 from envs import create_env
 import distutils.version
+
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 # Disables write_meta_graph argument, which freezes entire process and is mostly useless.
 class FastSaver(tf.train.Saver):
@@ -21,6 +23,7 @@ class FastSaver(tf.train.Saver):
              meta_graph_suffix="meta", write_meta_graph=True):
         super(FastSaver, self).save(sess, save_path, global_step, latest_filename,
                                     meta_graph_suffix, False)
+
 
 def run(args, server):
     env = create_env(args.env_id, client_id=str(args.task), remotes=args.remotes)
@@ -84,6 +87,7 @@ def run(args, server):
     sv.stop()
     logger.info('reached %s steps. worker stopped.', global_step)
 
+
 def cluster_spec(num_workers, num_ps):
     """
 More tensorflow setup for data parallelism
@@ -104,6 +108,7 @@ More tensorflow setup for data parallelism
         port += 1
     cluster['worker'] = all_workers
     return cluster
+
 
 def main(_):
     """
@@ -132,7 +137,8 @@ Setting up Tensorflow for data parallel work
 
     def shutdown(signal, frame):
         logger.warn('Received signal %s: exiting', signal)
-        sys.exit(128+signal)
+        sys.exit(128 + signal)
+
     signal.signal(signal.SIGHUP, shutdown)
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
@@ -146,6 +152,7 @@ Setting up Tensorflow for data parallel work
                                  config=tf.ConfigProto(device_filters=["/job:ps"]))
         while True:
             time.sleep(1000)
+
 
 if __name__ == "__main__":
     tf.app.run()

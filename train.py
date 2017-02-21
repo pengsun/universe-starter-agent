@@ -31,7 +31,9 @@ def new_cmd(session, name, cmd, mode, logdir, shell):
     elif mode == 'child':
         return name, "{} >{}/{}.{}.out 2>&1 & echo kill $! >>{}/kill.sh".format(cmd, logdir, session, name, logdir)
     elif mode == 'nohup':
-        return name, "nohup {} -c {} >{}/{}.{}.out 2>&1 & echo kill $! >>{}/kill.sh".format(shell, shlex_quote(cmd), logdir, session, name, logdir)
+        return name, "nohup {} -c {} >{}/{}.{}.out 2>&1 & echo kill $! >>{}/kill.sh".format(shell, shlex_quote(cmd),
+                                                                                            logdir, session, name,
+                                                                                            logdir)
 
 
 def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash', mode='tmux', visualise=False):
@@ -55,7 +57,8 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     cmds_map = [new_cmd(session, "ps", base_cmd + ["--job-name", "ps"], mode, logdir, shell)]
     for i in range(num_workers):
         cmds_map += [new_cmd(session,
-            "w-%d" % i, base_cmd + ["--job-name", "worker", "--task", str(i), "--remotes", remotes[i]], mode, logdir, shell)]
+                             "w-%d" % i, base_cmd + ["--job-name", "worker", "--task", str(i), "--remotes", remotes[i]],
+                             mode, logdir, shell)]
 
     cmds_map += [new_cmd(session, "tb", ["tensorboard", "--logdir", logdir, "--port", "12345"], mode, logdir, shell)]
     if mode == 'tmux':
@@ -66,7 +69,8 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     notes = []
     cmds = [
         "mkdir -p {}".format(logdir),
-        "echo {} {} > {}/cmd.sh".format(sys.executable, ' '.join([shlex_quote(arg) for arg in sys.argv if arg != '-n']), logdir),
+        "echo {} {} > {}/cmd.sh".format(sys.executable, ' '.join([shlex_quote(arg) for arg in sys.argv if arg != '-n']),
+                                        logdir),
     ]
     if mode == 'nohup' or mode == 'child':
         cmds += ["echo '#!/bin/sh' >{}/kill.sh".format(logdir)]
@@ -80,8 +84,8 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
 
     if mode == 'tmux':
         cmds += [
-        "tmux kill-session -t {}".format(session),
-        "tmux new-session -s {} -n {} -d {}".format(session, windows[0], shell)
+            "tmux kill-session -t {}".format(session),
+            "tmux new-session -s {} -n {} -d {}".format(session, windows[0], shell)
         ]
         for w in windows[1:]:
             cmds += ["tmux new-window -t {} -n {} {}".format(session, w, shell)]
@@ -94,7 +98,8 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
 
 def run():
     args = parser.parse_args()
-    cmds, notes = create_commands("a3c", args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode, visualise=args.visualise)
+    cmds, notes = create_commands("a3c", args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode,
+                                  visualise=args.visualise)
     if args.dry_run:
         print("Dry-run mode due to -n flag, otherwise the following commands would be executed:")
     else:

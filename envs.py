@@ -78,7 +78,7 @@ def create_vncatari_env(env_id, client_id, remotes, **_):
 def create_atari_env(env_id):
     env = gym.make(env_id)
     env = Vectorize(env)
-    #env = AtariRescale42x42(env)
+    # env = AtariRescale42x42(env)
     env = AtariRescale84x84(env)
     env = DiagnosticsInfo(env)
     env = Unvectorize(env)
@@ -215,6 +215,7 @@ class AtariRescale84x84(vectorized.ObservationWrapper):
 
     def _observation(self, observation_n):
         return [_process_frame84(observation) for observation in observation_n]
+
 
 class FixedKeyState(object):
     def __init__(self, keys):
