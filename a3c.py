@@ -123,7 +123,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
 
     last_state = env.reset()
     last_features = policy.get_initial_features()
-    length = 0
+    episode_length = 0
     rewards = 0
 
     while True:
@@ -139,8 +139,9 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
                 env.render()
 
             # collect the experience
-            rollout.add(last_state, action, reward, value_, terminal, last_features)
-            length += 1
+            reward_clipped = np.clip(reward, -1.0, +1.0)
+            rollout.add(last_state, action, reward_clipped, value_, terminal, last_features)
+            episode_length += 1
             rewards += reward
 
             last_state = state
@@ -154,13 +155,13 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
                 summary_writer.flush()
 
             timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            if terminal or length >= timestep_limit:
+            if terminal or episode_length >= timestep_limit:
                 terminal_end = True
-                if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
+                if episode_length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
                     last_state = env.reset()
                 last_features = policy.get_initial_features()
-                print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
-                length = 0
+                print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, episode_length))
+                episode_length = 0
                 rewards = 0
                 break
 
@@ -276,11 +277,8 @@ class A3C(object):
         return rollout
 
     def process(self, sess):
-        """
-process grabs a rollout that's been produced by the thread runner,
-and updates the parameters.  The update is then sent to the parameter
-server.
-"""
+        """ process grabs a rollout that's been produced by the thread runner,
+        and updates the parameters. The update is then sent to the parameter server. """
 
         sess.run(self.sync)  # copy weights from shared to local
         rollout = self.pull_batch_from_queue()
