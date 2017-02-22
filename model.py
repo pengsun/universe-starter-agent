@@ -3,20 +3,12 @@ import tensorflow as tf
 import tensorflow.contrib.rnn as rnn
 
 
-def normalized_columns_initializer(std=1.0):
-    def _initializer(shape, dtype=None, partition_info=None):
-        out = np.random.randn(*shape).astype(np.float32)
-        out *= std / np.sqrt(np.square(out).sum(axis=0, keepdims=True))
-        return tf.constant(out)
-
-    return _initializer
-
-
 def flatten(x):
     return tf.reshape(x, [-1, np.prod(x.get_shape().as_list()[1:])])
 
 
-def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="SAME", dtype=tf.float32, collections=None):
+def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="VALID", dtype=tf.float32, collections=None):
+    """ conv layer, valid padding, init like Torch 7"""
     with tf.variable_scope(name):
         stride_shape = [1, stride[0], stride[1], 1]
         filter_shape = [filter_size[0], filter_size[1], int(x.get_shape()[3]), num_filters]
@@ -24,23 +16,22 @@ def conv2d(x, num_filters, name, filter_size=(3, 3), stride=(1, 1), pad="SAME", 
         # there are "num input feature maps * filter height * filter width"
         # inputs to each hidden unit
         fan_in = np.prod(filter_shape[:3])
-        # each unit in the lower layer receives a gradient from:
-        # "num output feature maps * filter height * filter width" /
-        #   pooling size
-        fan_out = np.prod(filter_shape[:2]) * num_filters
-        # initialize weights with random weights
-        w_bound = np.sqrt(6. / (fan_in + fan_out))
+        bound = 1.0 / np.sqrt(fan_in)
 
-        w = tf.get_variable("W", filter_shape, dtype, tf.random_uniform_initializer(-w_bound, w_bound),
+        w = tf.get_variable("W", filter_shape, dtype, tf.random_uniform_initializer(-bound, bound),
                             collections=collections)
-        b = tf.get_variable("b", [1, 1, 1, num_filters], initializer=tf.constant_initializer(0.0),
+        b = tf.get_variable("b", [1, 1, 1, num_filters], dtype, tf.random_uniform_initializer(-bound, bound),
                             collections=collections)
         return tf.nn.conv2d(x, w, stride_shape, pad) + b
 
 
-def linear(x, size, name, initializer=None, bias_init=0):
-    w = tf.get_variable(name + "/w", [x.get_shape()[1], size], initializer=initializer)
-    b = tf.get_variable(name + "/b", [size], initializer=tf.constant_initializer(bias_init))
+def linear(x, size, name):
+    """ linear layer, init like Torch 7"""
+    fan_in = int(x.get_shape()[1])
+    bound = 1.0 / np.sqrt(fan_in)
+    w_shape = [x.get_shape()[1], size]
+    w = tf.get_variable(name + "/w", w_shape, initializer=tf.random_uniform_initializer(-bound, bound))
+    b = tf.get_variable(name + "/b", [size], initializer=tf.random_uniform_initializer(-bound, bound))
     return tf.matmul(x, w) + b
 
 
@@ -64,7 +55,7 @@ class Convx2LSTMActorCritic(object):
         x = flatten(x)
 
         # linear layer
-        x = linear(x, 256, 'fc', normalized_columns_initializer(0.01))
+        x = linear(x, 256, 'fc')
 
         # add singleton batch dim for LSTM time axis
         x = tf.expand_dims(x, [0])
@@ -90,10 +81,10 @@ class Convx2LSTMActorCritic(object):
         x = tf.reshape(lstm_outputs, [-1, size])
 
         # output: policy
-        self.logits = linear(x, ac_space, "action", normalized_columns_initializer(0.01))
+        self.logits = linear(x, ac_space, "action")
         self.sample = categorical_sample(self.logits, ac_space)[0, :]
         # output: value
-        self.vf = tf.reshape(linear(x, 1, "value", normalized_columns_initializer(1.0)), [-1])
+        self.vf = tf.reshape(linear(x, 1, "value"), [-1])
         # output: LSTM states
         self.state_out = [lstm_c[:1, :], lstm_h[:1, :]]
 
