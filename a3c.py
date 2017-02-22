@@ -11,6 +11,13 @@ import distutils.version
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 
+def anneal_rate(t, max_t, init_rate):
+    lr = init_rate * (max_t - t) / max_t
+    if lr < 0.0:
+        lr = 0.0
+    return lr
+
+
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
 
@@ -165,7 +172,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
 
 
 class A3C(object):
-    def __init__(self, env, task, visualise):
+    def __init__(self, env, task, visualise, max_global_steps):
         """ An implementation of the A3C algorithm that is reasonably well-tuned for the VNC environments.
 
         Below, we will have a modest amount of complexity due to the way TensorFlow handles data parallelism.
@@ -174,6 +181,7 @@ class A3C(object):
 
         self.env = env
         self.task = task
+        self.max_global_steps = max_global_steps
         worker_device = "/job:worker/task:{}/cpu:0".format(task)
         with tf.device(tf.train.replica_device_setter(1, worker_device=worker_device)):
             with tf.variable_scope("global"):
@@ -215,7 +223,23 @@ class A3C(object):
             self.runner = RunnerThread(env, pi, 20, visualise)
 
             grads = tf.gradients(self.loss, pi.var_list)
+            grads, _ = tf.clip_by_global_norm(grads, 40.0)
 
+            # copy weights from the parameter server to the local model
+            self.sync = tf.group(*[v1.assign(v2) for v1, v2 in zip(pi.var_list, self.network.var_list)])
+
+            grads_and_vars = list(zip(grads, self.network.var_list))
+            inc_step = self.global_step.assign_add(tf.shape(pi.x)[0])
+
+            # the optimizer. each worker has its own
+            # opt = tf.train.AdamOptimizer(1e-4)
+            self.lr = tf.placeholder(tf.float32)
+            opt = tf.train.RMSPropOptimizer(self.lr, decay=0.99, momentum=0.0, epsilon=0.1, use_locking=False)
+            self.train_op = tf.group(opt.apply_gradients(grads_and_vars), inc_step)
+            self.summary_writer = None
+            self.local_steps = 0
+
+            # summary
             if use_tf12_api:
                 tf.summary.scalar("model/policy_loss", pi_loss / bs)
                 tf.summary.scalar("model/value_loss", vf_loss / bs)
@@ -223,6 +247,7 @@ class A3C(object):
                 tf.summary.image("model/state", pi.x)
                 tf.summary.scalar("model/grad_global_norm", tf.global_norm(grads))
                 tf.summary.scalar("model/var_global_norm", tf.global_norm(pi.var_list))
+                tf.summary.scalar("model/lr", self.lr)
                 self.summary_op = tf.summary.merge_all()
 
             else:
@@ -232,21 +257,8 @@ class A3C(object):
                 tf.image_summary("model/state", pi.x)
                 tf.scalar_summary("model/grad_global_norm", tf.global_norm(grads))
                 tf.scalar_summary("model/var_global_norm", tf.global_norm(pi.var_list))
+                tf.scalar_summary.scalar("model/lr", self.lr)
                 self.summary_op = tf.merge_all_summaries()
-
-            grads, _ = tf.clip_by_global_norm(grads, 40.0)
-
-            # copy weights from the parameter server to the local model
-            self.sync = tf.group(*[v1.assign(v2) for v1, v2 in zip(pi.var_list, self.network.var_list)])
-
-            grads_and_vars = list(zip(grads, self.network.var_list))
-            inc_step = self.global_step.assign_add(tf.shape(pi.x)[0])
-
-            # each worker has a different set of adam optimizer parameters
-            opt = tf.train.AdamOptimizer(1e-4)
-            self.train_op = tf.group(opt.apply_gradients(grads_and_vars), inc_step)
-            self.summary_writer = None
-            self.local_steps = 0
 
     def start(self, sess, summary_writer):
         self.runner.start_runner(sess, summary_writer)
@@ -281,7 +293,9 @@ server.
         else:
             fetches = [self.train_op, self.global_step]
 
+        cur_global_step = self.global_step.eval()
         feed_dict = {
+            self.lr: anneal_rate(cur_global_step, self.max_global_steps, 0.0007),
             self.local_network.x: batch.si,
             self.ac: batch.a,
             self.adv: batch.adv,

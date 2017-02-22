@@ -27,7 +27,9 @@ class FastSaver(tf.train.Saver):
 
 def run(args, server):
     env = create_env(args.env_id, client_id=str(args.task), remotes=args.remotes)
-    trainer = A3C(env, args.task, args.visualise)
+
+    max_global_steps = args.max_global_steps
+    trainer = A3C(env, args.task, args.visualise, max_global_steps)
 
     # Variable names that start with "local" are not saved in checkpoints.
     if use_tf12_api:
@@ -70,8 +72,6 @@ def run(args, server):
                              save_model_secs=30,
                              save_summaries_secs=30)
 
-    num_global_steps = 100000000
-
     logger.info(
         "Starting session. If this hangs, we're mostly likely waiting to connect to the parameter server. " +
         "One common cause is that the parameter server DNS name isn't resolving yet, or is misspecified.")
@@ -79,7 +79,7 @@ def run(args, server):
         trainer.start(sess, summary_writer)
         global_step = sess.run(trainer.global_step)
         logger.info("Starting training at step=%d", global_step)
-        while not sv.should_stop() and (not num_global_steps or global_step < num_global_steps):
+        while not sv.should_stop() and (not max_global_steps or global_step < max_global_steps):
             trainer.process(sess)
             global_step = sess.run(trainer.global_step)
 
@@ -113,6 +113,7 @@ def main(_):
 
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbosity', default=0, help='Set verbosity.')
+    parser.add_argument('--max-global-steps', default=100000000, type=int, help='Number of global steps')
     parser.add_argument('--task', default=0, type=int, help='Task index')
     parser.add_argument('--job-name', default="worker", help='worker or ps')
     parser.add_argument('--num-workers', default=1, type=int, help='Number of workers')
