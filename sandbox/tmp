@@ -1,0 +1,19 @@
+mkdir -p save/breakout
+echo /usr/bin/python train.py --num-workers=2 --env-id=BreakoutDeterministic-v3 --log-dir=save/breakout > save/breakout/cmd.sh
+tmux kill-session -t a3c
+tmux new-session -s a3c -n ps -d bash
+tmux new-window -t a3c -n w-0 bash
+tmux new-window -t a3c -n w-1 bash
+tmux new-window -t a3c -n tb bash
+tmux new-window -t a3c -n htop bash
+sleep 1
+tmux send-keys -t a3c:ps 'CUDA_VISIBLE_DEVICES= /usr/bin/python worker.py --log-dir save/breakout --env-id BreakoutDeterministic-v3 --num-workers 2 --job-name ps' Enter
+tmux send-keys -t a3c:w-0 'CUDA_VISIBLE_DEVICES= /usr/bin/python worker.py --log-dir save/breakout --env-id BreakoutDeterministic-v3 --num-workers 2 --job-name worker --task 0 --remotes 1' Enter
+tmux send-keys -t a3c:w-1 'CUDA_VISIBLE_DEVICES= /usr/bin/python worker.py --log-dir save/breakout --env-id BreakoutDeterministic-v3 --num-workers 2 --job-name worker --task 1 --remotes 1' Enter
+tmux send-keys -t a3c:tb 'tensorboard --logdir save/breakout --port 12345' Enter
+tmux send-keys -t a3c:htop htop Enter
+
+failed to connect to server
+Use `tmux attach -t a3c` to watch process output
+Use `tmux kill-session -t a3c` to kill the job
+Point your browser to http://localhost:12345 to see Tensorboard
