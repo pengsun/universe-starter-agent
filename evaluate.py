@@ -18,7 +18,7 @@ def evaluate_loop(env, network, max_episodes, args):
     print('evaluating for {} episodes...'.format(max_episodes))
     while n_episode < max_episodes:
         fetched = network.act(last_state, *last_features)
-        action = fetched[0]
+        action, features = fetched[0], fetched[2:]
 
         state, reward, terminal, _ = env.step(action.argmax())
         if render:
@@ -30,12 +30,17 @@ def evaluate_loop(env, network, max_episodes, args):
             print("reward = {}".format(reward))
 
         if terminal:
+            last_state = env.reset()
+            last_features = network.get_initial_features()
+
             print("#episode = {}, #step = {}, reward sum = {}".format(n_episode, step, episode_reward[n_episode]))
             episode_length[n_episode] = step
-            env.reset()
             step = 0
             n_episode += 1
         else:
+            last_state = state
+            last_features = features
+
             step += 1
             time.sleep(sleep_time)
 
@@ -60,16 +65,16 @@ def main(args):
     from model import Convx2LSTMActorCritic
 
     # model
+    sess = tf.Session()
     with tf.variable_scope("global"):
         network = Convx2LSTMActorCritic(env.observation_space.shape, env.action_space.n)
-    sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
-    saver = tf.train.Saver()
 
     # load model parameters
     checkpoint = tf.train.get_checkpoint_state(ckpt_dir)
     if checkpoint and checkpoint.model_checkpoint_path:
+        saver = tf.train.Saver()
         saver.restore(sess, checkpoint.model_checkpoint_path)
         print("checkpoint loaded:", checkpoint.model_checkpoint_path)
     else:
