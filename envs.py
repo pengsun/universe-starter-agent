@@ -2,6 +2,7 @@ import cv2
 from gym.spaces.box import Box
 import numpy as np
 import gym
+import gym_tvizdoom
 from gym import spaces
 import logging
 import universe
@@ -23,6 +24,8 @@ def create_env(env_id, client_id, remotes, **kwargs):
         return create_flash_env(env_id, client_id, remotes, **kwargs)
     elif spec.tags.get('atari', False) and spec.tags.get('vnc', False):
         return create_vncatari_env(env_id, client_id, remotes, **kwargs)
+    elif spec.tags.get('vizdoom', False):
+        return create_vizdoom_env(env_id)
     else:
         # Assume atari.
         assert "." not in env_id  # universe environments have dots in names.
@@ -72,6 +75,15 @@ def create_vncatari_env(env_id, client_id, remotes, **_):
     logger.info('Connecting to remotes: %s', remotes)
     fps = env.metadata['video.frames_per_second']
     env.configure(remotes=remotes, start_timeout=15 * 60, fps=fps, client_id=client_id)
+    return env
+
+
+def create_vizdoom_env(env_id):
+    env = gym.make(env_id)
+    env = Vectorize(env)
+    env = VizdoomRescale84x84x3(env)
+    env = DiagnosticsInfo(env)
+    env = Unvectorize(env)
     return env
 
 
@@ -208,6 +220,7 @@ def _process_frame84x84x3(frame):
     frame = np.reshape(frame, [84, 84, 3])
     return frame
 
+
 class AtariRescale42x42(vectorized.ObservationWrapper):
     def __init__(self, env=None):
         super(AtariRescale42x42, self).__init__(env)
@@ -229,6 +242,15 @@ class AtariRescale84x84(vectorized.ObservationWrapper):
 class AtariRescale84x84x3(vectorized.ObservationWrapper):
     def __init__(self, env=None):
         super(AtariRescale84x84x3, self).__init__(env)
+        self.observation_space = Box(0.0, 1.0, [84, 84, 3])
+
+    def _observation(self, observation_n):
+        return [_process_frame84x84x3(observation) for observation in observation_n]
+
+
+class VizdoomRescale84x84x3(vectorized.ObservationWrapper):
+    def __init__(self, env=None):
+        super(VizdoomRescale84x84x3, self).__init__(env)
         self.observation_space = Box(0.0, 1.0, [84, 84, 3])
 
     def _observation(self, observation_n):
