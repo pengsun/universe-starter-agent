@@ -233,9 +233,9 @@ class A3C(object):
             inc_step = self.global_step.assign_add(tf.shape(pi.x)[0])
 
             # the optimizer. each worker has its own
-            # opt = tf.train.AdamOptimizer(1e-4)
+            opt = tf.train.AdamOptimizer(1e-4)
             self.lr = tf.placeholder(tf.float32)
-            opt = tf.train.RMSPropOptimizer(self.lr, decay=0.99, momentum=0.0, epsilon=0.1, use_locking=False)
+            # opt = tf.train.RMSPropOptimizer(self.lr, decay=0.99, momentum=0.0, epsilon=0.1, use_locking=False)
             self.train_op = tf.group(opt.apply_gradients(grads_and_vars), inc_step)
             self.summary_writer = None
             self.local_steps = 0
