@@ -105,7 +105,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env-id', default="BreakoutDeterministic-v3", help='Environment id')
     parser.add_argument('--ckpt-dir', default="save/breakout/train", help='Checkpoint directory path')
-    parser.add_argument('--output-dir', default="/tmp/myexp", help='Output directory path')
+    parser.add_argument('--output-dir', default="", help='Output directory path')
     parser.add_argument('--max-episodes', default=2, type=int, help='Number of episodes to evaluate')
     parser.add_argument('--sleep-time', default=0.0, type=float, help='sleeping time')
     parser.add_argument('--render', action='store_true', help='render screen')
