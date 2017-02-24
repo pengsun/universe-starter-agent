@@ -46,6 +46,7 @@ def evaluate_loop(env, network, max_episodes, args):
 
     print('evaluation done.')
     print('avg score = {}'.format(episode_reward.mean()))
+    print('std score = {}'.format(episode_reward.std()))
     print('avg episode length = {}'.format(episode_length.mean()))
 
 
