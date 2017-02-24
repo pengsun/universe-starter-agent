@@ -1,7 +1,18 @@
 from envs import create_env
+from gym import wrappers
 import numpy as np
 import time
 import argparse
+
+
+def avg_err(a):
+    avg = a.mean()
+    trials = len(a)
+    if trials == 1:
+        err = 0.0
+    else:
+        err = np.std(a) / (np.sqrt(trials) - 1)
+    return avg, err
 
 
 def evaluate_loop(env, network, max_episodes, args):
@@ -45,18 +56,22 @@ def evaluate_loop(env, network, max_episodes, args):
             time.sleep(sleep_time)
 
     print('evaluation done.')
-    print('avg score = {}'.format(episode_reward.mean()))
-    print('std score = {}'.format(episode_reward.std()))
-    print('avg episode length = {}'.format(episode_length.mean()))
+    s_avg, s_err = avg_err(episode_reward)
+    print('scores = {} +- {}'.format(s_avg, s_err))
+    l_avg, l_err = avg_err(episode_length)
+    print('episode length = {} +- {}'.format(l_avg, l_err))
 
 
 def main(args):
     env_id = args.env_id
-    ckpt_dir = args.ckpt_dir
     max_episodes = args.max_episodes
+    ckpt_dir = args.ckpt_dir
+    output_dir = args.output_dir
 
     # env
     env = create_env(env_id, 0, 1)
+    if len(output_dir) > 0:
+        env = wrappers.Monitor(env, output_dir)
     if args.render:
         env.render()
 
@@ -90,6 +105,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env-id', default="BreakoutDeterministic-v3", help='Environment id')
     parser.add_argument('--ckpt-dir', default="save/breakout/train", help='Checkpoint directory path')
+    parser.add_argument('--output-dir', default="/tmp/myexp", help='Output directory path')
     parser.add_argument('--max-episodes', default=2, type=int, help='Number of episodes to evaluate')
     parser.add_argument('--sleep-time', default=0.0, type=float, help='sleeping time')
     parser.add_argument('--render', action='store_true', help='render screen')
